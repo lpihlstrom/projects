@@ -18,28 +18,104 @@ library(FlowSorted.DLPFC.450k)
 BiocManager::install("CpGFilter")
 library(CpGFilter)
 
-# Read sample data from Sample Sheet (minfi)
+# Read demographic and phenotype data from Sample Sheet (minfi)
 targets <- read.metharray.sheet("/EPIC_methylation_analysis", pattern = "NBBall_Samplesheet_corrected_merged_Clinicopath_Clean.csv")
 
 # Read methylation data based on directions in sample sheet
 rgSet <- read.metharray.exp(targets=targets, extended = TRUE)
+
+rgSet
+# Class: RGChannelSetExtended 
+# dim: 1051815 504
 
 # Run primary wateRmelon QC 
 qcReport(rgSet, sampNames=targets$Sample_ID, sampGroups=targets$Neuropath_diagnosis, pdf = "qcReport_NBB.pdf")
 
 ```
 
-The cell count estimation tool implemented in minfi requires input data in RGChannelSet format, and must be therefore be performed on raw data, upstream of further QC and filtering.
+The cell type composition estimation tool implemented in minfi requires input data in RGChannelSet format, and must be therefore be performed on raw data, upstream of further QC and filtering.
 
 ```
-# Use minfy function to estimate cell counts based on DLPFC cell sorted reference data:
+# Use algorithm implemented in minfi to estimate cell type composition based on DLPFC cell sorted reference data:
 CellCounts <- estimateCellCounts(rgSet, compositeCellType = "DLPFC", cellTypes = c("NeuN_neg","NeuN_pos"))
 
+# Add estimates of NeuN positive and NeuN negative cells to phenotype data and calculate NeuN+ proportion:
 targets$NeuN_neg <- CellCounts[,1]
 targets$NeuN_pos <- CellCounts[,2]
 targets$NeurProp <- with(targets, NeuN_pos/(NeuN_pos + NeuN_neg))
+
+# Assess association between estimated cell type composition and neuropathological diagnoses:
 pairwise.t.test(targets$NeurProp, factor(targets$Neuropath_diagnosis))
 
+# Visualize cell composition across groups as boxplot:
+boxplot(targets$NeurProp ~ targets$Neuropath_diagnosis, col = "lightblue")
 
+# Boxplot reveals two outliers with low neuronal proportion. Get outlier IDs:
+Cell_composition_outliers <- subset(targets, NeurProp <= 0.125, select = c(PlatePos_ID))
 
 ```
+
+Different QC and normalization tools use different R objects as input, with implications for the order of operations. It is appropriate to perform sample filtering before normalization, yet sex checks require mapping to genome, which in the main pipeline is downstream of normalization. An initial non-normalized mapping to the genome is therefore performed for the sake of sex checks only. 
+
+```
+# Create a MethylSet without normalization (minfi):
+mset.raw <- preprocessRaw(rgSet)
+
+# Some trial and error at this point reveals that the MethylSet annotation needs to be updated. Annotate the MethylSet:
+annotation(mset.raw)[2] <- "ilm10b4.hg19"
+
+# Map to genome (minfi):
+gmset.raw <- mapToGenome(rgSet)
+
+# Estimate sex based on methylation data (minfi)
+methylSex <- getSex(gmset.raw)
+
+# Plot and compare with database sex:
+databaseSex <- as.factor(targets$Sex)
+plot(methylSex$xMed, methylSex$yMed, pch = 19, col = factor(databaseSex))
+
+# Add column with sex check outcome to phenotype data:
+targets$PassSexCheck <- methylSex$predictedSex == databaseSex
+
+# Get IDs of 3 sex-check failing samples
+targets$PassSexCheck <- methylSex$predictedSex == databaseSex
+FailSexCheck <- subset(targets, PassSexCheck == FALSE, select = c(PlatePos_ID))
+
+```
+
+A number of QC tools operate on RGChannelSet, and MethylSet objects.
+
+```
+# Filter out low quality probes and samples (wateRmelon):
+pfltSet <- pfilter(rgSet)
+
+# No samples and 7930 sites removed based on detection p-value. 9568 sites were removed as beadcount <3 in 5 % of samples.
+
+# Create MethylSet:
+mset.pflt <- preprocessRaw(pfltSet)
+
+mset.pflt
+# class: MethylSet 
+# dim: 849167 504 
+
+# Identify outliers based on the wateRmelon outlyx function. No outliers identified:
+outliers <- outlyx(mset.pflt, plot = TRUE)
+
+# Identity low quality samples based on minfi QC:
+minfiQC <- getQC(mset.pflt)
+plotQC(minfiQC)
+
+# Identify samples failing minfi QC. Plot shows 4 samples failing, falling below the following cuoff:
+FailMinfyQC <- subset(minfiQC, mMed < 11 & uMed < 10.05)
+
+# Concatenate lists of all samples failing and passing QC:
+Samples_failing_QC <- as.vector(c(Cell_composition_outliers$PlatePos_ID, FailSexCheck$PlatePos_ID, rownames(FailMinfyQC)))
+Samples_passing_QC <- targets[!targets$PlatePos_ID %in% Samples_failing_QC,]$PlatePos_ID
+
+# Of samples included in Lewy pathology EWAS, 2 failed sex-check, 2 failed minfyQC and 3 were cell composition outliers.
+# Filter out these 10 samples:
+mset.pflt.sampleflt <- mset.pflt[,Samples_passing_QC]
+targets.flt <- targets[!targets$PlatePos_ID %in% Samples_failing_QC,]
+```
+
+
