@@ -116,6 +116,27 @@ Samples_passing_QC <- targets[!targets$PlatePos_ID %in% Samples_failing_QC,]$Pla
 # Filter out these 10 samples:
 mset.pflt.sampleflt <- mset.pflt[,Samples_passing_QC]
 targets.flt <- targets[!targets$PlatePos_ID %in% Samples_failing_QC,]
+
+mset.pflt.sampleflt
+# class: MethylSet 
+# dim: 849167 494
 ```
 
+A number of different normalization algorithms were tested. Performance was evaluated primarily by assessing the pairwise concordance of beta values for technical replicates and by inspection of density plots. In order to generate these metrics, a beta matrix had to be generated based on each of the normalization methods, as well as unnormalized betas.
 
+```
+# Get raw betas
+rawBetas <- getBeta(mset.pflt.sampleflt)
+
+# Make data frame for storing values of mean pairwise difference in probe betas within technical duplicate pairs, of which there are 41:
+DupMeanDeltaBeta <- data.frame(raw = 1:41)
+
+# Pheno data includes a colmun "No_in_DupPair", which identifies duplicate pairs as 1a/1b, 2a/2b etc. Create a for loop that will calculate the mean difference across probes 
+# Get delta betas. Note that duplicate 14 and 37 have samples filtered out in QC. 
+for (i in c(1:13,15:36,38:41)){deltabeta <- print(mean(na.omit(pmax(rawBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-rawBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID],-(rawBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-rawBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID]))))); DupMeanDeltaBeta$raw[[i]] <- deltabeta}
+# Fill in missing values for sample 14 and 37
+DupMeanDeltaBeta$raw[[14]] <- NA
+DupMeanDeltaBeta$raw[[37]] <- NA
+
+
+```
