@@ -122,7 +122,7 @@ mset.pflt.sampleflt
 # dim: 849167 494
 ```
 
-A number of different normalization algorithms were tested. Performance was evaluated primarily by assessing the pairwise concordance of beta values for technical replicates and by inspection of density plots. In order to generate these metrics, a beta matrix had to be generated based on each of the normalization methods, as well as unnormalized betas.
+A number of different normalization algorithms were tested. Performance was evaluated primarily by assessing the pairwise concordance of beta values for technical duplicates and by inspection of density plots. In order to generate these metrics, a beta matrix had to be generated based on each of the normalization methods, as well as unnormalized betas.
 
 ```
 # Get raw betas
@@ -131,12 +131,53 @@ rawBetas <- getBeta(mset.pflt.sampleflt)
 # Make data frame for storing values of mean pairwise difference in probe betas within technical duplicate pairs, of which there are 41:
 DupMeanDeltaBeta <- data.frame(raw = 1:41)
 
-# Pheno data includes a colmun "No_in_DupPair", which identifies duplicate pairs as 1a/1b, 2a/2b etc. Create a for loop that will calculate the mean difference across probes 
-# Get delta betas. Note that duplicate 14 and 37 have samples filtered out in QC. 
+# Pheno data includes a column "No_in_DupPair", which identifies duplicate pairs as 1a/1b, 2a/2b etc. 
+# Create a for loop that will calculate the mean delta beta across all probes for each duplicate pair, and then add this value to the data frame:  
 for (i in c(1:13,15:36,38:41)){deltabeta <- print(mean(na.omit(pmax(rawBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-rawBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID],-(rawBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-rawBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID]))))); DupMeanDeltaBeta$raw[[i]] <- deltabeta}
-# Fill in missing values for sample 14 and 37
+# Note that duplicate 14 and 37 each have one sample filtered out in QC. Fill in missing values for sample 14 and 37
 DupMeanDeltaBeta$raw[[14]] <- NA
 DupMeanDeltaBeta$raw[[37]] <- NA
 
+# Normalize using the wateRmelon dasen method and get betas:
+mset.pflt.sampleflt.dasen <- dasen(mset.pflt.sampleflt)
+dasenBetas <- getBeta(mset.pflt.sampleflt.dasen)
+
+# Add dasen column and mean delta beta for each duplicate pair to data frame:
+DupMeanDeltaBeta$dasen <- NA
+for (i in c(1:13,15:36,38:41)){deltabeta <- print(mean(na.omit(pmax(dasenBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-dasenBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID],-(dasenBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-dasenBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID]))))); DupMeanDeltaBeta$dasen[[i]] <- deltabeta}
+
+# Normalize using the minfi preprosessQuantile method and get betas. This normalization method generates a GenomicRatioSet as output:
+GRset.pflt.sampleflt.quantile <- preprocessQuantile(mset.pflt.sampleflt, sex = targets$Sex)
+quantileBetas <- getBeta(GRset.pflt.sampleflt.quantile)
+
+# Add quantile column and mean delta beta for each duplicate pair to data frame:
+DupMeanDeltaBeta$quantile <- NA
+for (i in c(1:13,15:36,38:41)){deltabeta <- print(mean(na.omit(pmax(quantileBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-quantileBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID],-(quantileBetas[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-quantileBetas[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID]))))); DupMeanDeltaBeta$quantile[[i]] <- deltabeta}
+
+# Normalize using the watRmelon Beta-Mixture Quantile Normalisation method. This output comes as a beta matrix:
+mset.pflt.sampleflt.bmiq <- BMIQ(mset.pflt.sampleflt, nfit = 5000)
+
+# Add BMIQ column and mean delta beta for each duplicate pair to data frame:
+DupMeanDeltaBeta$bmiq <- NA
+for (i in c(1:13,15:36,38:41)){deltabeta <- print(mean(na.omit(pmax(mset.pflt.sampleflt.bmiq[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-mset.pflt.sampleflt.bmiq[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID],-(mset.pflt.sampleflt.bmiq[,subset(targets, No_in_DupPair == paste(i,"a", sep = ""))$PlatePos_ID]-mset.pflt.sampleflt.bmiq[,subset(targets, No_in_DupPair == paste(i,"b", sep = ""))$PlatePos_ID]))))); DupMeanDeltaBeta$bmiq[[i]] <- deltabeta}
+
+# Summarize duplicate delta beta metrics for each of the normalization methods. The dasen method has the lowest mean value at 0.02614:
+summary(DupMeanDeltaBeta)
+
+# Visualize effect of normalization on beta density plots for all samples:
+densityPlot(rawBetas, main = "Raw")
+densityPlot(dasenBetas, main = "dasen")
+densityPlot(quantileBetas, main = "Quantile")
+densityPlot(mset.pflt.sampleflt.bmiq, main = "dasen")
+
+# Visualize effect of normalization on beta density by probe type in a random single sample. 
+# The GRset and beta matrix lack probe type info, which is extracted from the MethylSet stage and provided for the plot function:
+plotBetasByType(mset.pflt.sampleflt[,1], main = "Raw")
+plotBetasByType(mset.pflt.sampleflt.dasen[,1], main = "Dasen")
+probetypes <- data.frame(Name = 1:848963)
+probetypes$Name <- rownames(quantileBetas)
+probetypes$Type <- getProbeType(mset.pflt.sampleflt)
+plotBetasByType(quantileBetas[,1], probeTypes = probetypes, main = "Quantile")
+plotBetasByType(mset.pflt.sampleflt.bmiq[,1], probeTypes = probetypes, main = "BMIQ")
 
 ```
