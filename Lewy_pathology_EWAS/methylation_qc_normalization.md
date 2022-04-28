@@ -181,3 +181,80 @@ plotBetasByType(quantileBetas[,1], probeTypes = probetypes, main = "Quantile")
 plotBetasByType(mset.pflt.sampleflt.bmiq[,1], probeTypes = probetypes, main = "BMIQ")
 
 ```
+
+The dasen normalization method (WateRmelon) is selected for further analyses. Data are mapped to genome before a number of further filtering steps. 
+
+```
+# Map to genome
+gmset.pflt.sampleflt.dasen <- mapToGenome(mset.pflt.sampleflt.dasen)
+
+gmset.pflt.sampleflt.dasen
+# class: GenomicMethylSet 
+# dim: 848963 494 
+
+# Filter out probes with SNPs
+gmset.pflt.sampleflt.dasen.dropsnps <- dropLociWithSnps(gmset.pflt.sampleflt.dasen)
+
+gmset.pflt.sampleflt.dasen.dropsnps
+# class: GenomicMethylSet 
+# dim: 820434 494 
+
+# Filter out probes on sex chromosomes
+EPICanno <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+keep <- !(featureNames(gmset.pflt.sampleflt.dasen.dropsnps) %in% EPICanno$Name[EPICanno$chr %in% c("chrX", "chrY")])table(keep)
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes <- gmset.pflt.sampleflt.dasen.dropsnps[keep,]
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes
+# class: GenomicMethylSet 
+# dim: 801978 494
+
+# Remove cross-reactive probes as reported by Chen et al (https://www.tandfonline.com/doi/full/10.4161/epi.23470):
+cross_reactive_probes <- scan("cross_reactive_probes_450k.txt", what = "character")
+keep <- !(featureNames(gmset.pflt.sampleflt.dasen.dropsnps.autosomes) %in% cross_reactive_probes)
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt <- gmset.pflt.sampleflt.dasen.dropsnps.autosomes[keep,]
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt
+# class: GenomicMethylSet 
+# dim: 777590 494 
+
+# Get betas: 
+betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt <- getBeta(gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt)
+ 
+# Filter out probe-wise outliers using the wateRmelon pwod function. Outliers are probably low MAF/SNP heterozygotes
+betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt.pwoflt <- pwod(betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt)
+# 242599 probes detected. These are coerced to NA. Note that these are individual data points, not probes across the dataset. 
+
+# Filter out probe-wise outliers using the wateRmelon pwod function. Outliers are probably low MAF/SNP heterozygotes
+betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt.pwoflt <- pwod(betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt)
+# 242599 probes detected. 
+# These are coerced to NA. Note that these are individual data points, not probes across the dataset.
+
+# Assess technical vs. biological probe variability and plot result:
+# First, make sample names where duplicates have identical names, by omitting last characters. 
+targets.flt$repdesign <- substr(targets.flt$Sample_Name, start = 1, stop = 5)
+# Next, run CpGFilterICC (CpGFilter):
+ICCfilter <- CpGFilterICC(betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt, targets.flt$repdesign)
+
+# Remove technical duplicates and samples failing genotyping QC:
+targets.flt.genoOK <- subset(targets.flt, Fail_NeuroChip_QC == "N")
+targets.flt.rmdup <- subset(targets.flt.genoOK, TechRep == "N")
+finalBetas <- betas.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt.pwoflt[,targets.flt.rmdup$PlatePos_ID]
+dim(finalBetas)
+# [1] 777590    442
+
+# Filter out the quartile of probes with the lowest ratio of biological to technical variability:
+quantile(ICCfilter)
+#        0%       25%       50%       75%      100% 
+# 0.0000000 0.1351696 0.3400994 0.5769919 0.9978198 
+keep <- names(subset(ICCfilter, ICCfilter > 0.1351696))
+finalBetas <- finalBetas[keep,]
+
+dim(finalBetas)
+# [1] 583192    442
+
+```
+
+The final output of the QC and normalization pipeline is a matrix of filtered and normalized beta values. 
+
+
+### Processing of BDR data
