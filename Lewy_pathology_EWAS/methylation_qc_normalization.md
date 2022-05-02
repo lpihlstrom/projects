@@ -258,3 +258,114 @@ The final output of the QC and normalization pipeline is a matrix of filtered an
 
 
 ### Processing of BDR data
+
+Following an identical processing pipeline for the independent replication dataset.
+
+```
+# Read pheno data
+BDRpheno <- read.delim("BDR_LB_pheno_219.txt", sep = " ", header = TRUE)
+
+# Read methylation data using minfi
+rgSet <- read.metharray.exp(base="/BDR/LB/idats", extended = TRUE, force = TRUE)
+
+rgSet
+# class: RGChannelSetExtended 
+# dim: 1051539 219 
+
+# Sort pheno data frame to match rgSet: 
+BDRpheno <- BDRpheno[with(BDRpheno, order(BDRpheno$Basename)),]
+colnames(rgSet) == BDRpheno$Basename
+# All TRUE
+
+# Run primary wateRmelon QC 
+qcReport(rgSet, sampNames=BDRpheno$Basename, sampGroups=BDRpheno$LB_Stage, pdf = "qcReport_BDR.pdf")
+
+# Use minfy function to estimate cell counts based on DLPFC cell sorted reference data:
+CellCounts <- estimateCellCounts(rgSet, compositeCellType = "DLPFC", cellTypes = c("NeuN_neg","NeuN_pos"))
+
+BDRpheno$NeuN_neg <- CellCounts[,1]
+BDRpheno$NeuN_pos <- CellCounts[,2]
+BDRpheno$NeurProp <- with(BDRpheno, NeuN_pos/(NeuN_pos + NeuN_neg))
+
+cor.test(BDRpheno$NeurProp, BDRpheno$LB_stage)
+# 	Pearson's product-moment correlation not significant
+
+# Filter out low quality probes and samples (wateRmelon):
+pfltSet5 <- pfilter(rgSet, perc = 5)
+
+# 0 samples having 5 % of sites with a detection p-value greater than 0.05 were removed  
+# 1052 sites were removed as beadcount <3 in 5 % of samples 
+# 45685 sites having 1 % of samples with a detection p-value greater than 0.05 were removed 
+
+# Sex-check has been performed previously on the same samples by Exeter collaborators
+
+mset.pflt <- preprocessRaw(pfltSet5)
+
+mset.pflt
+# class: MethylSet 
+# dim: 819331 219 
+
+# Identify outliers based on the wateRmelon outlyx function:
+outliers <- outlyx(mset.pflt, plot = TRUE)
+# No outliers
+
+# Identify low quality samples based on minfi QC:
+minfiQC <- getQC(mset.pflt)
+pdf("~/Methylation/Brain/BDR/qcPlot_minfiQC_BDR.pdf")
+plotQC(minfiQC)
+dev.off()
+
+# Identify samples failing minfi QC. Plot shows 19 samples failing, clustering below the following cuoff:
+FailMinfiQC <- rownames(subset(minfiQC, mMed < 10.5 & uMed < 10.5))
+Passing_QC <- rownames(BDRpheno[!rownames(BDRpheno) %in% FailMinfiQC,])
+
+# Filter out failing samples from mset and pheno data frame: 
+mset.pflt.sampleflt <- mset.pflt[,Passing_QC]
+BDRpheno.flt <- BDRpheno[Passing_QC,]
+
+mset.pflt.sampleflt
+# class: MethylSet 
+# dim: 819331 200 
+
+# Map to genome (minfi)
+gmset.pflt.sampleflt.dasen <- mapToGenome(mset.pflt.sampleflt.dasen)
+
+gmset.pflt.sampleflt.dasen
+# class: GenomicMethylSet 
+# dim: 819331 200 
+
+# Filter out probes on sex chromosomes
+EPICanno <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+keep <- !(featureNames(gmset.pflt.sampleflt.dasen.dropsnps) %in% EPICanno$Name[EPICanno$chr %in% c("chrX", "chrY")])
+table(keep)
+# keep
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes <- gmset.pflt.sampleflt.dasen.dropsnps[keep,]
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes
+# class: GenomicMethylSet 
+# dim: 775240 200  
+
+# Remove cross-reactive probes:
+cross_reactive_probes <- scan("~/Methylation/cross_reactive_probes_450k.txt", what = "character")
+keep <- !(featureNames(gmset.pflt.sampleflt.dasen.dropsnps.autosomes) %in% cross_reactive_probes)
+table(keep)
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt <- gmset.pflt.sampleflt.dasen.dropsnps.autosomes[keep,]
+
+gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt
+# class: GenomicMethylSet 
+# dim: 750785 200 
+
+# Get betas: 
+BDRbetas <- getBeta(gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt)
+
+# Filter out probe-wise outliers using the wateRmelon pwod function. Outliers are probably low MAF/SNP heterozygotes
+BDRbetas.pwoflt <- pwod(BDRbetas)
+# 141826 probes detected.
+
+```
+
+EPICannoSubset <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)[match(rownames(BDRbetas), getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)$Name), c(1,2,3,22:ncol(getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)))]
+
+
