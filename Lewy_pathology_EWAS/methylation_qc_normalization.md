@@ -252,6 +252,27 @@ finalBetas <- finalBetas[keep,]
 dim(finalBetas)
 # [1] 583192    442
 
+# The initial dataset included samples from donors with phenotypes not meeting the study inclusion criteria. 
+# Extract control and Lewy body spectrum subjects:
+aSyn_spctr_pheno <- targets.flt.rmdup[targets.flt.rmdup$Neuropath_GroupDx == "PD" | targets.flt.rmdup$Neuropath_GroupDx == "CONTR" | targets.flt.rmdup$Neuropath_GroupDx == "DLB" | targets.flt.rmdup$Neuropath_GroupDx == "iLBD",]
+
+# Included samples need complete data on relevant covariates:
+aSyn_spctr_pheno <- na.omit(subset(aSyn_spctr_pheno, select = c("PlatePos_ID","Sample_Name","Braak_aSyn_stage","Age_death","Sex","PMD_min","NeurProp","Plate","Neuropath_GroupDx")))
+
+# A few samples have an "atypical" Lewy body pattern not classifiable by Braak stage. These are filtered out:
+aSyn_spctr_pheno <- aSyn_spctr_pheno[aSyn_spctr_pheno$Braak_aSyn_stage != "Atypical",]
+
+# After removal of "atypical" cases, the Braak stage variable needs to be redifined as numeric:
+aSyn_spctr_pheno$Braak_aSyn_stage <- as.numeric(aSyn_spctr_pheno$Braak_aSyn_stage)
+
+# Extract final betas
+aSyn_spctr_betas <- finalBetas[,aSyn_spctr_pheno$PlatePos_ID]
+
+# Export NBB betas, pheno and probe data for osca analyses:
+write.table(aSyn_spctr_betas, "aSyn_spctr_betas.txt", sep = " ", dec = ".", row.names = TRUE, col.names = TRUE) 
+write.table(aSyn_spctr_pheno, "aSyn_spctr_pheno.txt", sep = " ", dec = ".", row.names = FALSE, col.names = TRUE)
+EPICannoSubset <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)[match(rownames(finalBetas), getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)$Name), c(1,2,3,22:ncol(getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)))]
+write.table(EPICannoSubset[,1:4], "~/Methylation/Brain/NBB_aSyn_spctr_FinalProbes.txt", sep = " ", dec = ".", row.names = TRUE, col.names = FALSE, quote = FALSE)
 ```
 
 The final output of the QC and normalization pipeline is a matrix of filtered and normalized beta values. 
@@ -364,8 +385,15 @@ BDRbetas <- getBeta(gmset.pflt.sampleflt.dasen.dropsnps.autosomes.xrflt)
 BDRbetas.pwoflt <- pwod(BDRbetas)
 # 141826 probes detected.
 
+# Export BDR betas, pheno and probe data for osca analyses
+write.table(BDRbetas, "BDR_betas.txt", sep = " ", dec = ".", row.names = TRUE, col.names = TRUE) 
+write.table(BDRpheno.flt, "BDR_pheno.txt", sep = " ", dec = ".", row.names = FALSE, col.names = TRUE)
+EPICannoSubset <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)[match(rownames(BDRbetas), getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)$Name), c(1,2,3,22:ncol(getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)))]
+write.table(EPICannoSubset[,1:4], "BDR_FinalProbes.txt", sep = " ", dec = ".", row.names = TRUE, col.names = FALSE, quote = FALSE)
+
 ```
 
-EPICannoSubset <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)[match(rownames(BDRbetas), getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)$Name), c(1,2,3,22:ncol(getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)))]
+Final filtered beta matrices were used for linear regression in R. In addition, R objects were written to text files for further analysis using the osca software package. 
+
 
 
