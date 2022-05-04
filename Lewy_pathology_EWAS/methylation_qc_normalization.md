@@ -275,7 +275,7 @@ dim(aSyn_spctr_betas)
 write.table(aSyn_spctr_betas, "aSyn_spctr_betas.txt", sep = " ", dec = ".", row.names = TRUE, col.names = TRUE) 
 write.table(aSyn_spctr_pheno, "aSyn_spctr_pheno.txt", sep = " ", dec = ".", row.names = FALSE, col.names = TRUE)
 EPICannoSubset <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)[match(rownames(finalBetas), getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)$Name), c(1,2,3,22:ncol(getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)))]
-write.table(EPICannoSubset[,1:4], "~/Methylation/Brain/NBB_aSyn_spctr_FinalProbes.txt", sep = " ", dec = ".", row.names = TRUE, col.names = FALSE, quote = FALSE)
+write.table(EPICannoSubset[,1:4], "NBB_aSyn_spctr_FinalProbes.txt", sep = " ", dec = ".", row.names = TRUE, col.names = FALSE, quote = FALSE)
 ```
 
 The final output of the QC and normalization pipeline is a matrix of filtered and normalized beta values. 
