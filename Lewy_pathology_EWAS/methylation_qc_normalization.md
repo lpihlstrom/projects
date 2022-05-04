@@ -268,6 +268,9 @@ aSyn_spctr_pheno$Braak_aSyn_stage <- as.numeric(aSyn_spctr_pheno$Braak_aSyn_stag
 # Extract final betas
 aSyn_spctr_betas <- finalBetas[,aSyn_spctr_pheno$PlatePos_ID]
 
+dim(aSyn_spctr_betas)
+# [1] 583192    322
+
 # Export NBB betas, pheno and probe data for osca analyses:
 write.table(aSyn_spctr_betas, "aSyn_spctr_betas.txt", sep = " ", dec = ".", row.names = TRUE, col.names = TRUE) 
 write.table(aSyn_spctr_pheno, "aSyn_spctr_pheno.txt", sep = " ", dec = ".", row.names = FALSE, col.names = TRUE)
