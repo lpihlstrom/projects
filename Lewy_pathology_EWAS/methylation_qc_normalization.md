@@ -393,7 +393,6 @@ write.table(EPICannoSubset[,1:4], "BDR_FinalProbes.txt", sep = " ", dec = ".", r
 
 ```
 
-Final filtered beta matrices were used for linear regression in R. In addition, R objects were written to text files for further analysis using the osca software package. 
-
+Final filtered beta matrices were used for downstream analyses including linear regression in R.
 
 
