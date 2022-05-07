@@ -46,8 +46,6 @@ tail -n +2 aSyn_spctr_pheno.txt | awk '{print $1,$1,$3}' > NBB_aSyn_spctr.phen
 # MOA analysis of Braak aSyn stage:
 ~/osca_Linux --moa --befile NBB_aSyn_spctr_adj --pheno NBB_aSyn_spctr.phen  --out NBB_aSyn_spctr_adj_moa
 
-~/osca_Linux --moment --befile NBB_aSyn_spctr_adj --pheno NBB_aSyn_spctr.phen  --out NBB_aSyn_spctr_adj
-
 
 
 ## Analysis of variance explained ##
