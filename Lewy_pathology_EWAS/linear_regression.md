@@ -8,6 +8,8 @@ library(sva)
 library(limma)
 BiocManager::install("bacon")
 library(bacon)
+install.packages("sailalithabollepalli-EpiSmokEr-54291ea.tar.gz", repos = NULL, type = "source")
+library(EpiSmokEr)
 ```
 
 ### Association analysis in NBB data
