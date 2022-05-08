@@ -61,5 +61,5 @@ smr_Mac --beqtl-summary ~/Downloads/Brain-mMeta/Brain-mMeta --query 1.0e-4 --pro
 
 
 
-# Analysis of runs of homozygosity on chromosome 22 to screen for 22q11 micro deletion: 
+# Analysis of runs of homozygosity on chromosome 22 to screen for 22q11 microdeletion: 
 /Users/lpihlstrom/Work/Tools/plink --bfile NeuroChip_HRCimp_rsq3_filtered_NBBpassQC --homozyg --homozyg-kb 2500 --chr 22 --out NeuroChip_NBB_homozyg_chr22
