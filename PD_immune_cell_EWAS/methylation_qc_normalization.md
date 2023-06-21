@@ -38,10 +38,10 @@ rgSet <- read.metharray.exp(targets=targets, extended = TRUE)
 # Run primary wateRmelon QC 
 qcReport(rgSet, sampNames=targets$Sample_Name, sampGroups=targets$Celltype, pdf = "~/Methylation/SortedLeukocytes/qcReport_SortedLeukocytes.pdf")
 
-´´´
-Different QC and normalization tools use different R objects as input, with implications for the order of operations. It is appropriate to perform sample filtering before normalization, yet sex checks require mapping to genome, which in the main pipeline is downstream of normalization. An initial non-normalized mapping to the genome is therefore performed for the sake of sex checks only. 
+```
+Different QC and normalization tools use different R objects as input, with implications for the order of operations. An initial non-normalized mapping to the genome is  performed for the sake of sex checks only. 
 
-´´´
+```
 # Correct annotation
 mset.raw <- preprocessRaw(rgSet)
 annotation(mset.raw)[2] <- "ilm10b4.hg19"
@@ -59,7 +59,7 @@ plot(methylSex$xMed, methylSex$yMed, pch = 19, col = factor(databaseSex))
 dev.off()
 targets$PassSexCheck <- methylSex$predictedSex == databaseSex
 
-# Rename samples to match methylation data and identify samples failing sex check
+# Rename samples to match methylation data and identify 1 sample failing sex check
 targets$PlatePos_ID <- paste(targets$Slide,targets$Array, sep="_")
 FailSexCheck <- subset(targets, PassSexCheck == FALSE, select = c(PlatePos_ID))
 
@@ -81,6 +81,35 @@ dev.off()
 
 # No outliers identified
 
+```
 
+A wide range of normalization methods are available. Given our dataset with samples from purified cell populations, we chose functional normalization implemented in the minfi package, as this is recommended for samples with large differences, such as different tissues or cell types: 
 
-´´´
+```
+
+gmset.funnorm <- preprocessFunnorm(pfltSet, nPCs = 2, ratioConvert = FALSE)
+
+# The output is an R object of class GenomicMethylSet with 857621 data points on 191 samples 
+
+# Visualize effect of funnorm normalization on Type I vs Type II probe beta density in a random sample
+mset.raw <- preprocessRaw(pfltSet)
+
+pdf("~/Methylation/SortedLeukocytes/qcPlot_Norm_DensityPlots_SortedLeukocytes.pdf")
+par(mfrow=c(1,2))
+plotBetasByType(mset.raw[,1], main = "Raw")
+funnormBetas <- getBeta(gmset.funnorm)
+dim(funnormBetas)
+probetypes <- data.frame(Name = 1:857621)
+probetypes$Name <- rownames(funnormBetas)
+probetypes$Type <- getProbeType(gmset.funnorm)
+plotBetasByType(funnormBetas[,1], probeTypes = probetypes, main = "Funnorm")
+
+# Visualize effect of funnorm normalization on cross-sample beta density
+par(mfrow=c(1,2))
+densityPlot(getBeta(mset.raw), main = "Raw")
+densityPlot(funnormBetas, main = "Funnorm")
+dev.off()
+
+```
+
+A number of further filtering and QC steps are performed 
