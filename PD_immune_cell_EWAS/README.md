@@ -1,0 +1,1 @@
+This folder includes workflow and code used in the analysis of immune cell DNA methylation data and monocyte qPCR data for the article titled "Epigenome-wide association study of immune cell polulations in Parkinson's disease" by Andersen et al. 
