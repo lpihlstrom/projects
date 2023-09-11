@@ -271,7 +271,7 @@ IDs_noCD14 <- rownames(subset(targets.flt, Celltype != "CD14"))
 betas_CD14 <- finalBetas[,IDs_CD14]
 betas_noCD14 <- finalBetas[,IDs_noCD14]
 betas_CD14_pwoflt <- pwod(betas_CD14)
-# 61082 probes detected.
+# 61082 probes detected. These individual outliers are coerced to NA. May reflect rare SNPs. 
 betas_CD14_pwoflt <- cbind(betas_CD14_pwoflt, betas_noCD14)
 betas_CD14_pwoflt <- betas_CD14_pwoflt[,rownames(targets.flt)]
 Mvals_CD14_pwoflt <- beta2m(betas_CD14_pwoflt)
