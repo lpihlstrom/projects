@@ -1,7 +1,73 @@
 <!DOCTYPE html>
-<html>
-  <body>
-    <h1>Public repository sharing code and summary statistics from neurodegenerative genomics projects</h1>
-    <p>See more about our research group at https://www.ous-research.no/pihlstrom/.</p>
-  </body>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My HTML Pages Directory</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: 0 auto; }
+        ul { list-style-type: none; padding-left: 20px; }
+        li { margin: 5px 0; }
+        .folder { font-weight: bold; color: #24292e; }
+        .file a { color: #0366d6; text-decoration: none; }
+        .file a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Project Webpages</h1>
+    <p>Click any link below to view the rendered HTML page:</p>
+    <div id="file-tree">Loading directory structure...</div>
+
+    <script>
+        // CHANGE THESE TO YOUR ACTUAL GITHUB DETAILS
+        const username = "lpihlstrom";
+        const repo = "projects";
+        const branch = "main"; // Change to "master" if your repository uses master
+
+        const treeUrl = `https://github.com{username}/${repo}/git/trees/${branch}?recursive=1`;
+
+        async function loadTree() {
+            try {
+                const response = await fetch(treeUrl);
+                const data = await response.json();
+                
+                if (!data.tree) {
+                    document.getElementById('file-tree').innerText = "Could not load files. Check username and repository name.";
+                    return;
+                }
+
+                // Filter for HTML files only (excluding the main index.html itself)
+                const htmlFiles = data.tree.filter(item => item.path.endsWith('.html') && item.path !== 'index.html');
+                
+                if (htmlFiles.length === 0) {
+                    document.getElementById('file-tree').innerText = "No other HTML files found in this repository.";
+                    return;
+                }
+
+                const list = document.createElement('ul');
+                htmlFiles.forEach(file => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'file';
+                    
+                    // Create relative link to the rendered page
+                    const link = document.createElement('a');
+                    link.href = `./${file.path}`;
+                    link.innerText = `📄 ${file.path}`;
+                    
+                    listItem.appendChild(link);
+                    list.appendChild(listItem);
+                });
+
+                const container = document.getElementById('file-tree');
+                container.innerHTML = '';
+                container.appendChild(list);
+
+            } catch (error) {
+                document.getElementById('file-tree').innerText = "Error loading repository files.";
+            }
+        }
+
+        loadTree();
+    </script>
+</body>
 </html>
