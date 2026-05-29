@@ -34,4 +34,50 @@
 
     .folder {
       font-weight: bold;
+      margin-top: 0.8em;
+    }
+
+    a {
+      text-decoration: none;
+      color: #0066cc;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .html-link {
+      color: #008000;
+    }
+
+    .other-file {
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Repository Browser</h1>
+  <div class="path">GitHub Pages view of lpihlstrom/projects</div>
+
+  <div id="content">Loading repository contents...</div>
+
+  <script>
+    const username = "lpihlstrom";
+    const repo = "projects";
+
+    async function fetchContents(path = "") {
+      const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    function githubPagesUrl(path) {
+      return `https://${username}.github.io/${repo}/${path}`;
+    }
+
 </html>
