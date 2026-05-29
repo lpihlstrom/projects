@@ -8,39 +8,46 @@
         body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: 0 auto; }
         ul { list-style-type: none; padding-left: 20px; }
         li { margin: 5px 0; }
-        .folder { font-weight: bold; color: #24292e; }
         .file a { color: #0366d6; text-decoration: none; }
         .file a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <h1>Project webpages</h1>
+    <h1>Project Webpages</h1>
     <p>Click any link below to view the rendered HTML page:</p>
     <div id="file-tree">Loading directory structure...</div>
 
     <script>
-        // CHANGE THESE TO YOUR ACTUAL GITHUB DETAILS
+        // STEP 1: Put your exact GitHub information between these quotes
         const username = "lpihlstrom";
         const repo = "projects";
-        const branch = "main"; // Change to "master" if your repository uses master
+        const branch = "main"; // Change to "master" if your repository default branch is master
 
-        const treeUrl = `https://github.com/repos/${username}/${repo}/git/trees/${branch}?recursive=1`;
+        // STEP 2: This is the corrected API line. 
+        // It uses "://github.com", followed by a slash, followed by the plural word "repos".
+        const treeUrl = `https://://github.com/repos/${username}/${repo}/git/trees/${branch}?recursive=1`;
 
         async function loadTree() {
             try {
                 const response = await fetch(treeUrl);
+                
+                // If GitHub returns an error (like 404 or 403), handle it here
+                if (!response.ok) {
+                    throw new Error(`GitHub API returned status: ${response.status}`);
+                }
+
                 const data = await response.json();
                 
                 if (!data.tree) {
-                    document.getElementById('file-tree').innerText = "Could not load files. Check username and repository name.";
+                    document.getElementById('file-tree').innerText = "Could not parse repository data.";
                     return;
                 }
 
-                // Filter for HTML files only (excluding the main index.html itself)
+                // Filter out everything except HTML files, and skip the main index.html
                 const htmlFiles = data.tree.filter(item => item.path.endsWith('.html') && item.path !== 'index.html');
                 
                 if (htmlFiles.length === 0) {
-                    document.getElementById('file-tree').innerText = "No other HTML files found in this repository.";
+                    document.getElementById('file-tree').innerText = "No nested HTML files found.";
                     return;
                 }
 
@@ -49,7 +56,6 @@
                     const listItem = document.createElement('li');
                     listItem.className = 'file';
                     
-                    // Create relative link to the rendered page
                     const link = document.createElement('a');
                     link.href = `./${file.path}`;
                     link.innerText = `📄 ${file.path}`;
@@ -63,7 +69,8 @@
                 container.appendChild(list);
 
             } catch (error) {
-                document.getElementById('file-tree').innerText = "Error loading repository files.";
+                // Displays the exact error reason on the screen
+                document.getElementById('file-tree').innerText = `Error: ${error.message}. Please check if your repository is public and your branch name is correct.`;
             }
         }
 
