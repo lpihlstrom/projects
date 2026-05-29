@@ -24,7 +24,7 @@
         const branch = "main"; // Change to "master" if your repository default branch is master
 
         // STEP 2: This is the corrected API line. 
-        // It uses "://github.com", followed by a slash, followed by the plural word "repos".
+        // It uses "://api.github.com", followed by a slash, followed by the plural word "repos".
         const treeUrl = `https://github.com/repos/${username}/${repo}/git/trees/${branch}?recursive=1`;
 
         async function loadTree() {
