@@ -1,0 +1,68 @@
+---
+title: "Investigate hits in the additive YOPD meta-GWAS analysis"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Project: GP2_EUR_YOPD_metaGWAS
+
+### Author: 
+- IHL
+
+### Version: 
+- R version 4.4.1 (2024-06-14)
+
+### Notebook Overview
+- This script displays genome wide significant SNPs in the additive meta-analysis. 
+- The same method was used to display genome wide significant SNPs in the recessive meta-analysis
+
+### Changelog
+- Notebook generated 23.10.25
+
+#Load libraries
+```{r}
+library(tidyverse)
+library(data.table)
+library(Hmisc)
+library(dplyr)
+library(tidyr)
+library(qqman)
+```
+
+#Read in dataframes
+```{r}
+META <- fread('~/Documents/META_additive.tbl')
+
+#change P-value to P for simplicity
+META <- META %>%
+ rename(P = `P-value`)
+```
+
+```{r}
+# Separate the ID column into CHR and POS, keeping the ID column untouched
+META <- META %>%
+  separate(MarkerName, into = c("CHR", "POS"), sep = ":", convert = TRUE, remove = FALSE)
+
+head(META)
+
+```
+
+```{r}
+#Look at genome wide significant SNPs:
+
+# Find the significant p-values
+significant_p_values_orig <- META %>% filter(P < 0.00000005) %>% arrange(P)
+
+# This will give you the rows where P values are below the threshold.
+print(significant_p_values_orig)
+
+
+```
+
+#Look at the significant hits NOT on chromosome 4 
+```{r}
+sign_not_4 <- META %>% filter(P < 0.00000005) %>% arrange(P) 
+sign_not_4 <- sign_not_4 %>% filter(!(CHR == "4"))
+print(sign_not_4)
+```

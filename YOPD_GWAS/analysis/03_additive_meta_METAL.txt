@@ -1,0 +1,56 @@
+######################################################################
+## Genome-wide association study of young onset Parkinson's disease ##
+##                   META ANALYSIS of ADDITIVE GWASes               ##
+##                   FOR METAL SOFTWARE                             ##
+##                   By Ingeborg H. Lie - 2025                      ##
+######################################################################
+
+## METAL-script for the additive YOPD GWAS Meta-analysis, including datasets from GP2, NGRC, IPDGC (7 IPDGC files, DUTCH, GERMANY, NEUROX, NIA, OSLO, SPAIN, TUBI)
+## Note that the same METAL-commands for meta-analysis were applied to the recessive YOPD GWAS output files prepared for METAL
+
+
+# Define analysis scheme
+SCHEME STDERR
+
+# Enable frequency tracking across input files
+AVERAGEFREQ ON
+MINMAXFREQ ON
+
+# Enable genomic control
+GENOMICCONTROL ON
+
+# Describe input file columns
+SEPARATOR       TAB
+MARKER ID
+ALLELE EFFECT_ALLELE NON_EFFECT_ALLELE
+FREQ FREQ
+EFFECT BETA
+STDERR SE
+PVAL P
+WEIGHT N
+CUSTOMVARIABLE TotalSampleSize
+LABEL TotalSampleSize as N
+
+# Process input files
+PROCESS     GP2_add_HG38_for_metal.tsv
+PROCESS     NGRC_add_HG38_for_metal.tsv
+PROCESS     DUTCH_add_HG38_for_metal.tsv
+PROCESS     GERMANY_add_HG38_for_metal.tsv
+PROCESS     NEUROX_DBGAP_add_HG38_for_metal.tsv
+PROCESS     NIA_HG38_add_for_metal.tsv
+PROCESS     OSLO_add_HG38_for_metal.tsv
+PROCESS     SPAIN_add_HG38_for_metal.tsv
+PROCESS     TUBI_add_HG38_for_metal.tsv
+
+# Define outfile and filters
+OUTFILE METAANALYSIS_ADDITIVE_YOPDGWAS .tbl
+ADDFILTER MAF > 0.01
+ANALYZE HETEROGENEITY
+
+QUIT
+
+
+
+
+
+

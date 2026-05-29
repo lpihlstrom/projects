@@ -1,0 +1,244 @@
+---
+title: "Preparation of single additive GWAS files for METAL"
+output: html_notebook
+---
+
+## Project: GP2_EUR_YOPD_metaGWAS
+
+### Author: 
+- IHL
+
+### Version: 
+- R version 4.4.1 (2024-06-14)
+
+### Notebook Overview
+- This script displays how the single GWASes (PLINK 2 output format) were modified and formatted for METAL meta-analysis
+- Note that PLINK2 gwas output in this script (additive gwas, IPDGC SPAIN) has been lifted from HG19 to HG38 prior to this script. The lifted file includes both the old HG19 coordinates and the new HG38 coordinates. 
+- Every variable that are previously lifted to HG38 have the prefix **38** or suffix **_38** ("chrom38","pos38","ref38","alt38","A1_38","OMITTED_38").
+- The variables without a prefix (chrom, pos,id,ref,alt,A1) are the original ones in HG19.
+- Note! The GP2 files were originally in HG38 and were not lifted. Hence, no HG19-coordinates needed to be removed from the GP2 files prior to modification for METAL. 
+
+
+### Changelog
+- 23.10.25 Notebook made 
+
+#Load libraries
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+#Read in the additive gwas output plink 2 spain file
+```{r}
+df <- fread(
+  "/Users/Documents/spain_additive_gwas_lifted.tsv", 
+  sep = "\t", 
+  colClasses = c("id" = "character")  # Specify ID column as character
+)
+
+
+dim(df)
+colnames(df) 
+
+```
+## Make a hg38 IPDGC file
+- Extract the lifted coordinates and alleles in HG38, in addition to the other necessary variables
+```{r}
+#Select the variables
+selected_df <- df %>% select(chrom38, pos38, ref38, alt38, A1_38, OMITTED_38, P, OR,"LOG(OR)_SE", OBS_CT, A1_CASE_CT, A1_CTRL_CT)
+
+#Show the dataframe 
+head(selected_df)
+
+```
+
+```{r}
+
+#Check for rows in the selected HG38 dataframe  with NA in chr or positions 
+miss_chr_38<- selected_df %>% filter(is.na(chrom38)) 
+dim(miss_chr_38)
+
+miss_pos_38<- selected_df %>% filter(is.na(pos38))
+dim(miss_pos_38)
+
+#Remove the rows that could not be fully lifted to Hg38
+selected_df <- selected_df %>% filter(!is.na(chrom38) & !is.na(pos38))  # Remove rows that have NA in either chrom38 or pos38. 
+dim(selected_df)
+```
+
+```{r}
+#Modify the HG38 dataframe for METAL
+
+# Step to create a new column FREQ
+selected_df  <- selected_df  %>%
+  mutate(FREQ = (A1_CASE_CT + A1_CTRL_CT) / (OBS_CT * 2))
+
+# Step to create a new column BETA
+selected_df  <- selected_df  %>%
+  mutate(BETA = log(OR))  # Calculate BETA as the log of OR
+
+# Step to create a new column COHORT
+selected_df  <- selected_df  %>%
+  mutate(COHORT = "SPAIN")  # Set COHORT to "SPAIN" for all rows
+
+ # Create N with the same values as OBS_CT
+selected_df  <- selected_df  %>%
+  mutate(N = OBS_CT) 
+
+  
+# Step to create new column ID by concatenating chr38 and pos38
+selected_df <- selected_df %>%
+  mutate(ID = paste(chrom38, pos38, sep = ":"))  # Creates ID column with the new HG38 ID based on the lifted over chr and pos variables
+
+# Print the dim of rows where the 'ID' column is NA
+na_rows1 <- selected_df %>% filter(is.na(chrom38)) 
+dim(na_rows1)
+na_rows2 <- selected_df %>% filter(is.na(pos38)) 
+dim(na_rows2)
+na_rows3 <- selected_df %>%filter(is.na(ID)) 
+dim(na_rows3)
+
+colnames(selected_df)
+```
+
+```{r}
+## Rename variables 
+
+# Rename A1_38 to just A1
+selected_df <- selected_df %>%
+  rename(A1 = A1_38)
+
+#Rename ref38 to just ref
+selected_df <- selected_df %>%
+  rename(ref = ref38)
+#Rename alt38 to just alt
+selected_df <- selected_df %>%
+  rename(alt= alt38)
+
+#Rename OMITTED_38 to just OMITTED
+selected_df <- selected_df %>%
+  rename(OMITTED = OMITTED_38)
+
+#Rename LOG(OR)SE to just SE
+selected_df <- selected_df %>%
+  rename(SE = "LOG(OR)_SE")
+```
+
+### Generate the OMITTED Column if needed
+- Not necessary in this file, since it already has the "OMITTED" column
+```{r}
+
+# Create the Omitted column
+#selected_df$OMITTED <- apply(selected_df, 1, function(row) {
+  # Get values from each column
+#  ref_base <- row["ref"]
+#  alt_base <- row["alt"]
+#  A1_base <- row["A1"]
+  
+  # Determine which base is omitted
+#  if (ref_base != A1_base) {
+#    return(ref_base)
+#  } else if (alt_base != A1_base) {
+#    return(alt_base)
+#  } else {
+#    return(NA)  # If neither base is omitted
+#  }
+#})
+
+#head(selected_df)
+
+```
+
+```{r}
+#Select only the rows you need from the selected dataframe and name "IPDGC_METAL"
+IPDGC_METAL <- selected_df %>% select(ID, A1, OMITTED, N, FREQ, BETA, SE, P, COHORT)
+
+colnames(IPDGC_METAL)
+```
+
+```{r}
+#RENAME A1 to EFFECT_ALLELE, and OMITTED to NON_EFFECT_ALLELE
+
+IPDGC_METAL<- IPDGC_METAL %>%
+  rename(EFFECT_ALLELE = A1)
+
+IPDGC_METAL<- IPDGC_METAL %>%
+  rename(NON_EFFECT_ALLELE = OMITTED)
+
+colnames(IPDGC_METAL)
+```
+
+# Remove SNPs with more than 1 effect allele and duplicated ids
+- In METAL, error messages might occur if there are duplicate ID SNPs in a file with different effect alleles. 
+- Also, if SNPs with the same ID and effect allele but different frequencies do occur, it is not clear how these are managed. 
+- Therefore, remove SNPs with more than 1 effect allele prior to METAL and also duplicated SNPs.
+- If you wish to inspect these SNPs prior to removal, this can be done by uncommenting in the code snippets below
+
+### Remove SNPS with the same ID but different affect allele 
+
+- If you wish to inspect the SNPs with same ID but different effect alleles, uncomment below
+```{r}
+# Identify SNPs with same ID but different EFFECT_ALLELE)
+# ambiguous_snps <- IPDGC_METAL %>%
+#  group_by(ID) %>%
+#  filter(n_distinct(EFFECT_ALLELE) > 1)  # More than 1 unique effect allele
+
+# View ambiguous SNPs
+# print("Ambiguous SNPs:")
+# head(ambiguous_snps)
+```
+
+- Remove SNPs with the same ID but different EFFECT_ALLELE
+```{r}
+# Remove SNPs with the same ID but different EFFECT_ALLELE
+IPDGC_METAL_cleaned <- IPDGC_METAL %>%
+  group_by(ID) %>%
+  filter(n_distinct(EFFECT_ALLELE) == 1) %>%  # Keep only markers with a single effect allele
+  ungroup()
+
+#Check dim of the new file
+dim(IPDGC_METAL_cleaned)
+
+#Check how many rows were removed
+nrow(IPDGC_METAL)-nrow(IPDGC_METAL_cleaned)
+```
+
+### Remove all duplicated SNPs
+```{r}
+
+#If you wish to inspect the duplicates prior to removal, please uncomment below 
+
+#Search for duplicate IDS
+
+# Step 1: Identify duplicate IDs
+#duplicate_ids <- IPDGC_METAL_cleaned %>%
+#  group_by(ID) %>%
+#  filter(n() > 1) %>%
+#  pull(ID) %>%
+#  unique()
+
+# Step 2: Extract rows with the same ID
+#rows_with_duplicates <- IPDGC_METAL_cleaned %>%
+#  filter(ID %in% duplicate_ids)
+#head(rows_with_duplicates)
+
+# Filter rows to keep only those with unique IDs
+IPDGC_METAL_cleaned_unique_ID <- IPDGC_METAL_cleaned %>%
+  group_by(ID) %>%
+  filter(n() == 1)
+
+dim(IPDGC_METAL_cleaned_unique_ID)
+nrow(IPDGC_METAL_cleaned) - nrow(IPDGC_METAL_cleaned_unique_ID)
+```
+
+
+```{r}
+# Specify the path where you want to save your file
+output_path <- "/Users/my_directory/my_file.tsv"
+
+# Write the data.table to a .tsv file
+fwrite(IPDGC_METAL_cleaned_unique_ID, file = output_path, sep = "\t", na = "NA")
+
+# Print a message to confirm saving
+cat("File saved to:", output_path, "\n")
+```

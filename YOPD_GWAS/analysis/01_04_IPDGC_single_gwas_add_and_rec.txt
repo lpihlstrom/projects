@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name=YOPDGWAS_Script3
+#SBATCH --output=%x.out
+
+##################################################################################
+##  SCRIPT - RUN SUBSTUDY-LEVEL ASSOCIATION ANALYSES                            ##
+## Project: Genome-wide association study of young onset Parkinson's disease    ##
+##   Author:                LP, modified by IHL                                 ##
+##   Script overview:   Perform additive and recessive model GWAS of IPDGC data ##
+##   The code in this script was repeated for all IPDGC cohorts.                ##
+##  Changelog: 2019: Script generated                                           ##
+##################################################################################
+
+module load plink2
+mkdir RESULTS/
+
+C
+
+plink2 --bfile IPDGC_data_freeze_2018sept_maf001_geno05_hweE6 --keep IDlist_YOPDGWAS_OSLO.txt --glm sex recessive hide-covar cols=+a1freqcc,+a1countcc,+gcountcc --covar YOPDGWAS_OSLO_PCs.eigenvec --ci 0.95 --pfilter 1 --mac 1 --adjust gc --out RESULTS/YOPDGWAS_OSLO_sex_5PCs_recessive
+
+
+plink2 --bfile IPDGC_data_freeze_2018sept_maf001_geno05_hweE6 --keep IDlist_YOPDGWAS_DUTCH.txt --glm sex hide-covar cols=+a1freqcc,+a1countcc --covar YOPDGWAS_DUTCH_PCs.eigenvec --ci 0.95 --pfilter 1 --mac 1 --adjust gc --out RESULTS/YOPDGWAS_DUTCH_sex_5PCs

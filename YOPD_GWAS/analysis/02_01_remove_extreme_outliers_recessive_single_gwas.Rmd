@@ -1,0 +1,128 @@
+---
+title: "Remove extreme outliers from recessive single GWAS files prior to running METAL"
+output: html_notebook
+---
+
+## Project: GP2_EUR_YOPD_metaGWAS
+
+### Author: 
+- IHL
+
+### Version: 
+- R version 4.5.2 (2025-10-31)
+
+### Notebook Overview
+- METAL is not able to run properly with extreme outlier values, including infinite values
+- This script displays how SNPs with extreme outlier values (beta-values >4 and <-4) were removed from the single, recessive GWAS analyses prior to METAL meta-analysis.
+- The same steps were conducted on all single, recessive GWAS files formatted for METAL
+
+### Changelog
+- 05.11.25 Notebook made 
+
+##Load R-packages
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+## Read in the file
+```{r}
+
+gp2 <- fread("/Users/Documents/GP2_recessive_gwas_for_METAL.tsv")
+
+head(gp2)
+dim(gp2)
+```
+# Inspect the rows with beta-values >4, similar to OR ~55 and <-4, similar to OR ~ 0.02
+```{r}
+# Assuming your dataframes are stored in a list
+cohorts <- list(gp2)
+
+# Assign cohort names to the list for easier access
+cohort_names <- c("gp2")
+names(cohorts) <- cohort_names
+
+# Loop through each cohort and create a new dataframe with both large and small BETA values
+for (cohort_name in cohort_names) {
+  
+  # Ensure we are dealing with a dataframe
+  if (is.data.frame(cohorts[[cohort_name]])) {
+    
+    # Get the original dataframe
+    original_df <- cohorts[[cohort_name]]
+    
+    # Filter for high BETA values
+    high_beta_df <- original_df[original_df$BETA > 4, ]
+    
+    # Filter for low BETA values
+    low_beta_df <- original_df[original_df$BETA < -4, ]
+    
+    # Add a column to identify large and small categories
+    high_beta_df$Beta_Type <- "large"
+    low_beta_df$Beta_Type <- "small"
+    
+    # Combine the two dataframes into one
+    combined_df <- rbind(high_beta_df, low_beta_df)
+    
+    # Create a new name for the combined dataframe
+    combined_df_name <- paste0("combined_B_", cohort_name)
+    
+    # Assign the combined dataframe to a new variable
+    assign(combined_df_name, combined_df)
+    
+  } else {
+    warning(paste(cohort_name, "is not a dataframe."))
+  }
+}
+
+```
+
+#Inspect the dimensions of the files with large or small values
+```{r}
+dim(combined_B_gp2)
+head(combined_B_gp2)
+
+```
+
+# Create new .tsv files without the SNPs with outlier BETA-values
+```{r}
+# Assuming your dataframes are stored in a list
+cohorts <- list(gp2)
+
+# Assign cohort names to the list for easier access
+cohort_names <- c("gp2")
+names(cohorts) <- cohort_names
+
+# Specify the directory where you want to save the new dataframes
+output_directory <- "/Users/Documents/Results/"  # Modify this path as needed
+
+# Loop through each cohort and create new dataframes with the filtered data
+for (cohort_name in cohort_names) {
+  
+  # Ensure we are dealing with a dataframe
+  if (is.data.frame(cohorts[[cohort_name]])) {
+    
+    # Get the original dataframe
+    original_df <- cohorts[[cohort_name]]
+    
+    # Filter the dataframe to exclude BETA values above 4 and below -4
+    filtered_df <- original_df[original_df$BETA >= -4 & original_df$BETA <= 4, ]
+    
+    # Create a new name for the filtered dataframe
+    new_df_name <- paste0(cohort_name, "_between_minus4_and_4_recessive_gwas.tsv")
+    
+    # Construct the full file path
+    file_path <- file.path(output_directory, new_df_name)
+    
+    # Save the filtered dataframe to a TSV file without quotes around the header names
+    write.table(filtered_df, file_path, sep = "\t", row.names = FALSE, quote = FALSE)
+    
+  } else {
+    warning(paste(cohort_name, "is not a dataframe."))
+  }
+}
+
+# The filtered dataframes will be saved in the specified directory
+
+dim(filtered_df)
+```

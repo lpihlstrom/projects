@@ -1,0 +1,43 @@
+---
+title: "Perform GWAS using the recessive model on the NGRC (Hamza et al) data"
+output: html_notebook
+---
+
+## Project: GP2_EUR_YOPD_metaGWAS
+
+### Author: 
+- IHL
+
+### Version: 
+- PLINK 2.0, version plink2_mac_arm64_20250609.zip. Downloaded 19.06.25
+
+### Notebook Overview
+- This script performs GWAS using the recessive model on the NGRC (Hamza et al) genetic data
+- All YOPD individuals in the NGRC data have age at onset >=18 years and <40 years, and all controls have age at sample collection >=18 to <80.
+- The clinical data is prepared by LP, and the genetic data is QCed and imputed by LP previously
+
+### Changelog
+- Analysis performed 06.10.25
+```{bash}
+
+#Analysis performed on 06.10.25. GWAS were performed for chr 1-22 (all in the same file).
+
+PLINK2_PATH="/Users/Documents/PLINK_2/plink2_mac_arm64_20250609/plink2"
+
+  $PLINK2_PATH \
+    --bfile /Users/Documents/NGRC/NGRC_Hamza_YOPDGWAS \
+    --glm sex recessive hide-covar cols=+a1freqcc,+a1countcc,+gcountcc   \
+    --ci 0.95 \
+    --snps-only \
+    --covar /Users/Documents/NGRC/NGRC_Hamza_YOPDGWAS_PCs.eigenvec \
+    --covar-name PC1,PC2,PC3,PC4,PC5 \
+    --pfilter 1 \
+    --maf 0.005 \
+    --adjust gc \
+    --covar-variance-standardize \
+    --out /Users/Documents/NGRC/NGRC_results/RECESSIVE_GWAS_NGRC_5PCs
+
+# Print the output message and directory
+echo "Written to /Users/Documents/NGRC/NGRC_results/RECESSIVE_GWAS_NGRC_5PCs"
+
+```

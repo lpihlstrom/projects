@@ -1,0 +1,243 @@
+---
+title: "Convert single PLINK 2 output gwas files from HG19 to HG38 using liftOver"
+output: html_notebook
+---
+
+## Project: GP2_EUR_YOPD_metaGWAS
+
+### Author: 
+- MV, adapted by IHL
+
+### Version: 
+- R version 4.4.1 (2024-06-14)
+
+### Notebook Overview
+- This notebook shows how the single PLINK 2 output gwas files were lifted from HG19 to HG38 using liftOver
+- There are no indels in the PLINK2 output gwas files
+
+### Changelog
+- 23.10.25 Notebook made 
+
+### Read in the necessary libraries
+```{r}
+library(dplyr)
+library(GenomicRanges)
+library(rtracklayer)
+library(Biostrings)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(data.table)
+
+```
+
+### Read in the input file to be lifted over
+```{r}
+#### 0. INPUT  -----------------------------------------
+
+# The IPDGC SPAIN GWAS
+df <- fread(
+  "~/Documents/GWAS_recessive_SPAIN.PHENO1.glm.logistic.hybrid", 
+  sep = "\t", 
+  colClasses = c("ID" = "character"))  # Specify ID column as character
+
+
+
+head(df)
+dim(df)
+```
+
+### Rename columns to fit with the liftOver script
+```{r}
+
+# Required columns: id, chrom (without "chr"), pos, ref, alt
+
+
+names(df)[names(df) == "#CHROM"] <- "chrom"
+names(df)[names(df) == "ID"] <- "id"
+names(df)[names(df) == "POS"] <- "pos"
+names(df)[names(df) == "REF"] <- "ref"
+names(df)[names(df) == "ALT"] <- "alt"
+
+```
+
+## Perform LiftOver
+```{r}
+
+#### 1. MINIMAL VARIANT TABLE --------------------------
+mini <- df |> select(id, chrom, pos, ref, alt)
+
+gr37 <- GRanges(
+  seqnames = paste0("chr", mini$chrom),
+  ranges   = IRanges(start = mini$pos,
+                     width = pmax(nchar(mini$ref), 1L)),  # robust for indels
+  strand   = "*",
+  id  = mini$id,
+  ref = mini$ref,
+  alt = mini$alt
+)
+
+```
+
+
+```{r}
+
+#### 2. LIFTOVER ---------------------------------------
+chain <- import.chain("/Users/Documents/hg19ToHg38.over.chain")
+
+lo <- liftOver(gr37, chain)
+
+# keep variants that map *exactly once*
+mapped_ok   <- elementNROWS(lo) == 1L
+gr38        <- unlist(lo[mapped_ok])
+
+```
+
+```{r}
+#### 3. ALLELE FIX-UP ----------------------------------
+# Fetch hg38 reference base(s) at lifted positions
+ref38_base <- as.character(
+  getSeq(BSgenome.Hsapiens.UCSC.hg38,
+         names  = seqnames(gr38),
+         start  = start(gr38),
+         width  = nchar(mcols(gr38)$ref))
+)
+
+# Helper: reverse-complement any allele(s)
+revcomp <- function(x) as.character(reverseComplement(DNAStringSet(x)))
+
+r   <- mcols(gr38)$ref           # original REF
+a   <- mcols(gr38)$alt           # original ALT
+ref <- ref38_base                # hg38 reference
+
+# Identify how to reconcile REF with hg38
+is_match      <-  r == ref
+is_swap       <-  a == ref
+is_flip       <-  revcomp(r) == ref
+is_flip_swap  <-  revcomp(a) == ref
+
+actions <- ifelse(is_match,       "none",
+           ifelse(is_swap,        "swap",
+           ifelse(is_flip_swap,   "flip+swap",
+           ifelse(is_flip,        "flip", "ref_mismatch"))))
+
+# Generate final hg38-compatible alleles
+new_alt <- dplyr::case_when(
+  actions == "none"       ~ a,
+  actions == "swap"       ~ r,
+  actions == "flip"       ~ revcomp(a),
+  actions == "flip+swap"  ~ revcomp(r),
+  TRUE                    ~ NA_character_        # ref_mismatch or other junk
+)
+
+new_ref <- ref38_base
+
+
+
+
+```
+
+
+```{r}
+#### 4. COLLECT RESULTS & AUDIT -------------------------
+# variants that passed the checks
+keep <- actions != "ref_mismatch"
+lifted <- tibble(
+  id      = mcols(gr38)$id[keep],
+  chrom38 = as.character(sub("^chr", "", seqnames(gr38)[keep])),
+  pos38   = start(gr38)[keep],
+  ref38   = new_ref[keep],
+  alt38   = new_alt[keep],
+  action  = actions[keep]
+)
+
+# variants that failed at any stage
+dropped <- tibble(
+  id     = c(mcols(gr37)$id[!mapped_ok],
+             mcols(gr38)$id[ actions == "ref_mismatch" ]),
+  reason = c(rep("unmapped_or_multimapped", sum(!mapped_ok)),
+             rep("ref_mismatch", sum(actions == "ref_mismatch")))
+)
+
+
+```
+
+
+```{r}
+#### 5. MERGE BACK WITH ORIGINAL DATA -------------------
+df38 <- df |>               # original big data frame
+  left_join(lifted, by = "id")
+
+
+```
+
+
+```{r}
+#### 6. OPTIONAL: WRITE LOG FILES -----------------------
+#write.table(lifted,  "lifted_variants.tsv",  sep = "\t", quote = FALSE, row.names = FALSE)
+#write.table(dropped, "dropped_variants.tsv", sep = "\t", quote = FALSE, row.names = FALSE)
+
+```
+
+```{r}
+#### 7. UPDATE THE "A1" AND "OMITTED" COLUMNS
+A1_38 <- ifelse(df38$action == "flip" | df38$action == "flip+swap", revcomp(df38$A1), df38$A1)
+OMITTED_38 <- ifelse(df38$action == "flip" | df38$action == "flip+swap", revcomp(df38$OMITTED), df38$OMITTED) 
+df38$A1_38 <- A1_38
+df38$OMITTED_38 <- OMITTED_38
+```
+
+
+### Inspect the swapped, flipped and flipped+swapped alleles after liftover 
+```{r}
+print("look at the swapped")
+look_swap <- df38 %>% filter(action == "swap")
+head(look_swap)
+```
+```{r}
+print("look at the flipped")
+look_flip <- df38 %>% filter(action == "flip")
+head(look_flip)
+```
+```{r}
+
+print("look at the flip+swapped")
+look_flipswap <- df38 %>% filter(action == "flip+swap")
+head(look_flipswap)
+
+```
+
+### Look at the "dropped" IDS
+```{r}
+print("look at the dropped")
+head(dropped)
+table(dropped$reason)
+```
+
+### Inspect at the final dataframe
+```{r}
+colnames(df38)
+dim(df38)
+```
+
+## Write the df38 including the hg19 original coordinates and alleles and the lifted hg38 coordinates and alleles to a .tsv file using fwrite 
+```{r}
+# Specify the path where you want to save your .tsv file
+output_path <- "/Users/Documents/lifted_from_hg19_to_hg38_GWAS_recessive_SPAIN.PHENO1.glm.logistic.hybrid.tsv"
+
+# Write the data.table to a .tsv file
+fwrite(df38, file = output_path, sep = "\t", na = "NA")
+
+# Print a message to confirm saving
+cat("File saved to:", output_path, "\n")
+```
+
+```{r}
+#Optional
+# Specify the path where you want to save your .tsv file
+#output_path <- "/Users/Documents/DROPPED_from_hg19_to_hg38_GWAS_recessive_SPAIN.PHENO1.glm.logistic.hybrid.tsv"
+
+# Write the data.table to a .tsv file
+#fwrite(dropped, file = output_path, sep = "\t", na = "NA")
+
+# Print a message to confirm saving
+#cat("File saved to:", output_path, "\n")
+```

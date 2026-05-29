@@ -1,0 +1,388 @@
+---
+title: "Meta-analysis Figures"
+output: html_notebook
+---
+### Project: GP2_EUR_YOPD_metaGWAS
+
+### Author:IHL
+
+### Version:R version 4.5.2 (2025-10-31)
+
+### Notebook Overview
+- This script displays the code to generate the Manhattan-plot, Miami-plot, Beta-beta-plots, and Forest plots
+
+### Changelog
+- Notebook started 23.10.25
+
+# Libraries
+```{r}
+library(tidyverse)
+library(data.table)
+library(qqman)
+library(ggplot2)
+```
+
+
+# Manhattan plot and QQ-plot
+
+### Read in and prepare the metaGWAS output (METAL-format)
+- Make a custom dataset ("add") before making the plots for the additive meta analysis output
+- The same steps were taken for the recessive METAL-meta analysis output to generate the file "recc"
+```{r}
+# Read in file
+META <- fread(additive_metaanalysis.tbl) 
+
+# Select the variables you need to make the plot
+add <- META %>% select(CHR, POS, MarkerName, P)
+
+#Rename files to work with qqman R package
+add <- data %>%
+  rename(
+    BP = POS,
+    SNP = MarkerName,
+    )
+```
+
+
+### Make the Manhattan plot 
+```{r}
+library(qqman)
+
+
+tiff(
+  filename = "additive_manhattan.tiff",
+  width    = 18.5,  # 185 mm
+  height   = 12,    # adjust if needed
+  units    = "cm",
+  res      = 300
+)
+
+manhattan(add, 
+          col = c("blue4", "orange3"), 
+          cex = 0.6, cex.axis = 0.8, 
+          las = 1)
+
+dev.off()
+```
+
+### Make the QQ plot 
+```{r}
+tiff(
+  filename = "additive_QQ_plot.tiff",
+  width    = 18.5,  # 185 mm
+  height   = 12,    # adjust if needed
+  units    = "cm",
+  res      = 300
+)
+
+qq(add$P)
+
+dev.off()
+```
+
+
+# Miami plot (Additive on top, recessive at the bottow)
+```{r}
+## ====================================================================
+## FULL SCRIPT: Miami plot with Locus annotations, no grid,
+## and dashed genome-wide line at p < 5e-8 (red) in both panels
+## ====================================================================
+
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(patchwork)
+
+## --------------------------------------------------------------------
+## 0. Your GWAS dataframes: add, recc. Your list of top hits add_hits, recc_hits 
+## --------------------------------------------------------------------
+## These must already exist in your R session.
+## add and recc must contain at least: CHR, BP, P
+## add_hits and recc_hits must contain CHR, BP, Locus (SNP)
+
+# Ensure types
+add  <- add %>%
+  mutate(
+    CHR = as.integer(CHR),
+    BP  = as.numeric(BP),
+    P   = as.numeric(P)
+  )
+
+recc <- recc %>%
+  mutate(
+    CHR = as.integer(CHR),
+    BP  = as.numeric(BP),
+    P   = as.numeric(P)
+  )
+
+
+## --------------------------------------------------------------------
+## 2. Function: cumulative genomic position + -log10(P)
+## --------------------------------------------------------------------
+
+make_manh_data <- function(df) {
+  df <- df %>%
+    arrange(CHR, BP) %>%
+    group_by(CHR) %>%
+    mutate(chr_max = max(BP, na.rm = TRUE)) %>%
+    ungroup()
+
+  chr_offsets <- df %>%
+    group_by(CHR) %>%
+    summarise(chr_len = max(BP, na.rm = TRUE), .groups = "drop") %>%
+    arrange(CHR) %>%
+    mutate(offset = lag(cumsum(chr_len), default = 0)) %>%
+    select(CHR, offset, chr_len)
+
+  df <- df %>%
+    left_join(chr_offsets, by = "CHR") %>%
+    mutate(
+      pos  = BP + offset,   # cumulative genomic position
+      logp = -log10(P)      # -log10(P)
+    )
+
+  list(
+    data     = df,
+    chr_info = chr_offsets
+  )
+}
+
+## --------------------------------------------------------------------
+## 3. Apply to additive and recessive data
+## --------------------------------------------------------------------
+
+add_m   <- make_manh_data(add)
+recc_m  <- make_manh_data(recc)
+
+add_df   <- add_m$data
+recc_df  <- recc_m$data
+chr_info <- add_m$chr_info
+
+## --------------------------------------------------------------------
+## 4. Attach plotting coordinates to hits using CHR + BP
+## --------------------------------------------------------------------
+
+add_hits_pos <- add_hits %>%
+  mutate(
+    CHR = as.integer(CHR),
+    BP  = as.numeric(BP)
+  ) %>%
+  inner_join(
+    add_df %>% select(CHR, BP, pos, logp),
+    by = c("CHR", "BP")
+  )
+
+recc_hits_pos <- recc_hits %>%
+  inner_join(
+    recc_df %>% select(CHR, BP, pos, logp),
+    by = c("CHR", "BP")
+  )
+
+## --------------------------------------------------------------------
+## 5. Colors, y limits, chromosome centers, genome-wide line
+## --------------------------------------------------------------------
+
+add_df <- add_df %>%
+  mutate(col = ifelse(CHR %% 2 == 0, "blue4", "orange3"))
+
+recc_df <- recc_df %>%
+  mutate(col = ifelse(CHR %% 2 == 0, "blue4", "orange3"))
+
+y_max <- max(
+  max(add_df$logp,  na.rm = TRUE),
+  max(recc_df$logp, na.rm = TRUE)
+) + 1
+y_max <- max(y_max, 15)
+
+chr_centers <- chr_info %>%
+  mutate(center = offset + chr_len / 2)
+
+# Genome-wide significance line: p = 5e-8
+gw_line <- -log10(5e-8)
+
+## --------------------------------------------------------------------
+## 6. Top panel: additive with Locus labels, no grid, dashed red GW line
+## --------------------------------------------------------------------
+
+p_top <- ggplot(add_df, aes(x = pos, y = logp)) +
+  geom_point(aes(color = col), size = 0.6) +
+  scale_color_identity() +
+  scale_y_continuous(
+    limits = c(0, y_max),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  scale_x_continuous(
+    breaks = chr_centers$center,
+    labels = chr_centers$CHR
+  ) +
+  # genome-wide significance line (dashed)
+  geom_hline(yintercept = gw_line, color = "red", linetype = "dashed") +
+  ylab(expression(-log[10](P))) +
+  theme_classic() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.line.x  = element_blank(),   # remove horizontal x-axis line in top panel
+    panel.grid   = element_blank(),
+    panel.border = element_blank()
+  ) +
+  geom_text_repel(
+    data = add_hits_pos,
+    aes(x = pos, y = logp, label = Locus),
+    size = 2.2,
+    nudge_y = 0.5,
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    box.padding = 0.25
+  )
+
+## --------------------------------------------------------------------
+## 7. Bottom panel: recessive (mirrored) with Locus labels, no grid, dashed red GW line
+## --------------------------------------------------------------------
+
+p_bottom <- ggplot(recc_df, aes(x = pos, y = -logp)) +
+  geom_point(aes(color = col), size = 0.6) +
+  scale_color_identity() +
+  scale_y_continuous(
+    limits = c(-y_max, 0),
+    expand = expansion(mult = c(0.02, 0))
+  ) +
+  scale_x_continuous(
+    breaks = chr_centers$center,
+    labels = chr_centers$CHR
+  ) +
+  # mirrored genome-wide significance line (dashed, negative)
+  geom_hline(yintercept = -gw_line, color = "red", linetype = "dashed") +
+  xlab("Chromosome") +
+  ylab(expression(-log[10](P))) +
+  theme_classic() +
+  theme(
+    panel.grid   = element_blank(),
+    panel.border = element_blank()
+  ) +
+  geom_text_repel(
+    data = recc_hits_pos,
+    aes(x = pos, y = -logp, label = Locus),
+    size = 2.2,
+    nudge_y = -0.5,
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    box.padding = 0.25
+  )
+
+## --------------------------------------------------------------------
+## 8. Combine and save
+## --------------------------------------------------------------------
+
+miami_plot <- p_top / p_bottom + plot_layout(heights = c(1, 1))
+
+ggsave(
+  filename = "/Users//Documents/miamiplot.tiff",
+  plot     = miami_plot,
+  width    = 18.5,   # cm
+  height   = 12,     # cm
+  units    = "cm",
+  dpi      = 300
+)
+
+```
+
+
+
+# Beta-beta-plots
+
+###  Read in files for the beta-beta-plot
+- Input data frame must include SNP identifiers and the two beta (effect size) columns for each of the two different summary statistics.
+- Ensure effect allele, non-effect allele, allele frequency (if used), and effect sizes are aligned between the two summary-statistic files before running.
+
+```{r}
+# Read in the dataframe
+df_aligned <- fread("df_aligned.tsv")
+
+```
+
+### Make the beta-beta plot
+```{r}
+
+# Load ggplot2 library
+library(ggplot2)
+
+
+# Create the scatter plot with semi-transparent points
+ggplot(df_aligned, aes(x = Effect_Nalls, y = Effect_YOPD)) + 
+  geom_point(color = "blue", size = 3, alpha = 0.5) +  # Points with 50% transparency
+  geom_hline(yintercept = 0, color = "red", linetype = "solid", lwd = 1) +  # Red line at y=0
+  geom_vline(xintercept = 0, color = "red", linetype = "solid", lwd = 1) +  # Red line at x=0
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed", lwd = 1) +  # 45-degree red line
+  labs(x = "Effect (Beta), Nalls 2019)", 
+       y = "Effect (Beta), YOPD)",
+       title = "B)") +  # Axis labels and title
+  theme_minimal() +  # Minimal theme
+  ylim(-1, 1)    +   # Set limits for the y-axis from -1 to +1
+xlim(-1,1)
+```
+
+# Forest Plot 
+- Example: SNCA risk locus, 4:89704960 (chr:pos) 
+
+### Read in the single GWASes used in the meta-analysis
+```{r}
+gp2 <- fread("gp2.tsv")
+ngrc <- fread("ngrc.tsv")
+dutch <- fread("dutch.tsv")
+germany <- fread("germany.tsv")
+neurox <- fread("neurox.tsv")
+nia <- fread("nia.tsv")
+oslo <- fread("oslo.tsv")
+spain <-fread("spain.tsv")
+tubi <- fread("tubi.tsv")
+```
+
+###  Extract the rows with the target SNP info
+```{r}
+# List of your data frame names
+cohorts <- c("gp2", "ngrc", "dutch", "germany", "neurox", "nia", "oslo", "spain", "tubi")
+
+# SNP ID to match
+target_snp <- "4:89704960"
+
+# Loop over each data frame
+for (cohort in cohorts) {
+  # Get the actual data frame
+  df <- get(cohort)
+  
+  # Subset the row(s) where ID matches the SNP
+  snp_row <- df[df$ID == target_snp, ]
+  
+  # Create a new variable like gp2_snp, etc.
+  assign(paste0(cohort, "_snp"), snp_row)
+}
+
+snp_df <- rbind(gp2_snp, ngrc_snp, dutch_snp, germany_snp,neurox_snp, nia_snp, oslo_snp, spain_snp, tubi_snp)
+
+print(snp_df)
+```
+Note - ensure that the effect allele, non-effect allele, frequency of effect allele and effect sizes are aligned for all cohorts. If not, this must be fixed prior to making the figure
+
+### Make the figure
+```{r}
+
+labs <- snp_df$COHORT
+yi <- snp_df$BETA
+sei <- snp_df$SE
+res  <- rma(yi=yi, sei=sei, method="FE")
+summary(res)
+
+# Forest plot
+forest(
+  res,
+  transf = exp,                # show odds ratios instead of log-odds
+  refline = 1,                 # reference line at OR = 1
+  xlab = "Odds Ratio (95% CI)", 
+  slab = labs,                 # study labels
+  mlab = "Summary Estimate",   # summary label
+  main = "rs356182 (SNCA)" # <-- Adds the header/title
+)
+
+```
