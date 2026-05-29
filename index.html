@@ -1,80 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My HTML Pages Directory</title>
-    <style>
-        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: 0 auto; }
-        ul { list-style-type: none; padding-left: 20px; }
-        li { margin: 5px 0; }
-        .file a { color: #0366d6; text-decoration: none; }
-        .file a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h1>Project Webpages</h1>
-    <p>Click any link below to view the rendered HTML page:</p>
-    <div id="file-tree">Loading directory structure...</div>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repository Browser</title>
 
-    <script>
-        // STEP 1: Put your exact GitHub information between these quotes
-        const username = "lpihlstrom";
-        const repo = "projects";
-        const branch = "main"; // Change to "master" if your repository default branch is master
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      line-height: 1.5;
+      background: #f8f9fa;
+      color: #222;
+    }
 
-        // STEP 2: This is the corrected API line. 
-        // It uses "://api.github.com", followed by a slash, followed by the plural word "repos".
-        const treeUrl = `https://github.com/repos/${username}/${repo}/git/trees/${branch}?recursive=1`;
+    h1 {
+      margin-bottom: 0.2em;
+    }
 
-        async function loadTree() {
-            try {
-                const response = await fetch(treeUrl);
-                
-                // If GitHub returns an error (like 404 or 403), handle it here
-                if (!response.ok) {
-                    throw new Error(`GitHub API returned status: ${response.status}`);
-                }
+    .path {
+      color: #666;
+      margin-bottom: 2em;
+    }
 
-                const data = await response.json();
-                
-                if (!data.tree) {
-                    document.getElementById('file-tree').innerText = "Could not parse repository data.";
-                    return;
-                }
+    ul {
+      list-style-type: none;
+      padding-left: 1.2em;
+    }
 
-                // Filter out everything except HTML files, and skip the main index.html
-                const htmlFiles = data.tree.filter(item => item.path.endsWith('.html') && item.path !== 'index.html');
-                
-                if (htmlFiles.length === 0) {
-                    document.getElementById('file-tree').innerText = "No nested HTML files found.";
-                    return;
-                }
+    li {
+      margin: 0.3em 0;
+    }
 
-                const list = document.createElement('ul');
-                htmlFiles.forEach(file => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'file';
-                    
-                    const link = document.createElement('a');
-                    link.href = `./${file.path}`;
-                    link.innerText = `📄 ${file.path}`;
-                    
-                    listItem.appendChild(link);
-                    list.appendChild(listItem);
-                });
-
-                const container = document.getElementById('file-tree');
-                container.innerHTML = '';
-                container.appendChild(list);
-
-            } catch (error) {
-                // Displays the exact error reason on the screen
-                document.getElementById('file-tree').innerText = `Error: ${error.message}. Please check if your repository is public and your branch name is correct.`;
-            }
-        }
-
-        loadTree();
-    </script>
-</body>
+    .folder {
+      font-weight: bold;
 </html>
