@@ -15,7 +15,7 @@ This is a genome wide association study (GWAS) on a population of young onset Pa
 
 Please read the methods section of the paper for detailed information regarding upstream quality control and additional details. 
 
-Summary statistics generated from the study will be available for use on the GP2 approved analysis platform (Fill in correct information).
+Summary statistics generated from the study are also shared via this repository.
 
 
 ## Data statement
